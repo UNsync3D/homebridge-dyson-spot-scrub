@@ -1,0 +1,35 @@
+{
+  "pluginAlias": "DysonRobot",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Credentials are set up separately using the one-time auth script — see the README. Do **not** put your Dyson email or password here.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform Name",
+        "type": "string",
+        "default": "Dyson Robot"
+      },
+      "refreshIntervalSeconds": {
+        "title": "State Refresh Interval (seconds)",
+        "type": "integer",
+        "default": 30,
+        "minimum": 10,
+        "maximum": 300,
+        "description": "How often to request a state update from the robot (MQTT heartbeat is ~30s anyway)"
+      },
+      "logMqtt": {
+        "title": "Log MQTT messages",
+        "type": "boolean",
+        "default": false,
+        "description": "Enable verbose MQTT logging for debugging"
+      }
+    }
+  },
+  "layout": [
+    { "key": "name" },
+    { "key": "refreshIntervalSeconds" },
+    { "key": "logMqtt" }
+  ]
+}

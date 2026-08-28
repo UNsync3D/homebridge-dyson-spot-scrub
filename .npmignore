@@ -1,0 +1,19 @@
+# Development and test files
+.git/
+.gitignore
+.eslintrc*
+.prettierrc*
+
+# Deployment artefacts
+*.zip
+*.tar.gz
+
+# Local credential cache (never publish)
+dyson-creds.json
+*.creds.json
+
+# Editor / OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/
