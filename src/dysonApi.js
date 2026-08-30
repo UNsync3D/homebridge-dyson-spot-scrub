@@ -4,8 +4,10 @@
  * dysonApi.js — Dyson cloud REST API client
  *
  * Auth flow (confirmed working Aug 2026):
- *   POST api.cp.dyson.com/v3/userregistration/email/auth?country={CC}  → challengeId (OTP email sent)
- *   POST api.cp.dyson.com/v3/userregistration/email/auth/verify        → { token, account }
+ *   POST appapi.cp.dyson.com/v3/userregistration/email/auth?country={CC}  → challengeId (OTP email sent)
+ *   POST appapi.cp.dyson.com/v3/userregistration/email/verify             → { token, account }
+ *
+ * NOTE: api.cp.dyson.com is behind Cloudflare mTLS as of Aug 2026 — use appapi for ALL calls.
  *
  * All subsequent REST calls use: Authorization: Bearer {token}
  *
@@ -25,8 +27,8 @@ const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
 
-const API_HOST    = 'appapi.cp.dyson.com';
-const API_HOST_V3 = 'api.cp.dyson.com';
+const API_HOST = 'appapi.cp.dyson.com';
+// NOTE: api.cp.dyson.com is behind Cloudflare mTLS (as of Aug 2026) — do NOT use it.
 
 // Disable strict TLS — some platforms reject Dyson's cert chain without this
 const httpsAgent = new https.Agent({
@@ -99,9 +101,9 @@ async function authenticateV1(email, password, country = 'GB') {
  */
 async function initiateV3Auth(email, password, country = 'GB') {
   const res = await request(
-    API_HOST_V3, 'POST',
+    API_HOST, 'POST',
     `/v3/userregistration/email/auth?country=${country}`,
-    { email, password, language: 'EN' }
+    { email, password }
   );
   if (res.status === 200 && res.data.challengeId) {
     return res.data.challengeId;
@@ -118,8 +120,8 @@ async function initiateV3Auth(email, password, country = 'GB') {
  */
 async function verifyV3Auth(email, password, challengeId, otpCode) {
   const res = await request(
-    API_HOST_V3, 'POST',
-    '/v3/userregistration/email/auth/verify',
+    API_HOST, 'POST',
+    '/v3/userregistration/email/verify',
     { email, password, challengeId, otpCode }
   );
   if (res.status === 200) {
