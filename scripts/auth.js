@@ -21,6 +21,12 @@
  *
  * You only need to run this once. The token is long-lived and will be reused
  * on every Homebridge restart.
+ *
+ * If you already have a bearer token (e.g. captured via Proxyman, or copied
+ * from the ha-dyson-spot-scrub Home Assistant integration), you can skip the
+ * interactive flow entirely:
+ *
+ *   node scripts/auth.js --token YOUR_BEARER_TOKEN_HERE
  */
 
 const readline = require('readline');
@@ -88,6 +94,15 @@ function askPassword(prompt) {
   });
 }
 
+// ── Argument parsing ──────────────────────────────────────────────────────────
+
+const args = process.argv.slice(2);
+
+function getArg(flag) {
+  const idx = args.indexOf(flag);
+  return idx !== -1 && args[idx + 1] ? args[idx + 1] : null;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -103,6 +118,37 @@ async function main() {
     console.error('  Try running with sudo, or check the directory permissions.\n');
     process.exit(1);
   }
+
+  // ── Fast path: --token flag ───────────────────────────────────────────────
+  const pastedToken = getArg('--token');
+  if (pastedToken) {
+    console.log('Bearer token provided via --token flag.');
+
+    if (fs.existsSync(CRED_PATH)) {
+      const answer = (await ask('Existing credentials found. Overwrite? [y/N] ')).trim().toLowerCase();
+      if (answer !== 'y' && answer !== 'yes') {
+        console.log('\nSetup cancelled — existing credentials kept.\n');
+        rl.close();
+        process.exit(0);
+      }
+      console.log();
+    }
+
+    if (!fs.existsSync(HB_STORAGE)) {
+      fs.mkdirSync(HB_STORAGE, { recursive: true, mode: 0o700 });
+    }
+    DysonApi.saveCache(CRED_PATH, pastedToken);
+
+    console.log('✓ Setup complete!');
+    console.log(`  Credentials saved to: ${CRED_PATH}`);
+    console.log('\nRestart Homebridge to activate the plugin:\n');
+    console.log('  sudo systemctl restart homebridge\n');
+
+    rl.close();
+    process.exit(0);
+  }
+
+  // ── Interactive path: email + password ───────────────────────────────────
 
   // Check for existing credentials
   if (fs.existsSync(CRED_PATH)) {
@@ -143,6 +189,8 @@ async function main() {
     } catch (initErr) {
       console.error(`\n✗ Failed to start OTP flow: ${initErr.message}`);
       console.error('  Check your email address, password, and country code, then try again.');
+      console.error('\n  Tip: if you already have a bearer token, skip this flow entirely:');
+      console.error('       node scripts/auth.js --token YOUR_TOKEN_HERE');
       process.exit(1);
     }
 
