@@ -42,6 +42,7 @@ test('connects with the custom-authorizer URL, keepalive 30, own reconnect, then
   assert.deepEqual(f.calls.subs, ['+/SER-1234/#']);
   assert.equal(f.calls.pubs[0][0], 'RB05/SER-1234/command');
   assert.equal(f.calls.pubs[0][1].msg, 'REQUEST-CURRENT-STATE');
+  assert.match(f.calls.pubs[0][1].time, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   m.stop();
 });
 
@@ -78,6 +79,9 @@ test('JDM replies are matched by msgId and other clients replies are ignored', a
   const [topic, body] = f.calls.pubs.at(-1);
   assert.equal(topic, 'RB05/SER-1234/command/jdm');
   assert.equal(body.version, '1.0.1');
+  assert.equal(typeof body.msgId, 'number'); // numeric on the wire, like the app's
+  assert.ok(Number.isInteger(body.msgId) && body.msgId > 0 && body.msgId < 2 ** 31);
+  assert.ok(!('time' in body), 'JDM requests carry no time field');
   assert.equal(body.method, 'service.get_preference');
   send(f, 'RB05/SER-1234/status/jdm', { msgId: 'someone-else', code: 0, data: { nope: true } });
   send(f, 'RB05/SER-1234/status/jdm', { msgId: body.msgId, code: 0, method: 'service.get_preference', data: { map_id: 'M' } });
@@ -91,9 +95,9 @@ test('prop.post is forwarded; UPDATE-LOCAL-BROKER-CONFIG is never forwarded', as
   let states = 0;
   m.on('prop', (p) => props.push(p));
   m.on('state', () => states++);
-  send(f, 'RB05/SER-1234/status/jdm', { method: 'prop.post', data: { work_mode: 38 } });
+  send(f, 'RB05/SER-1234/status/jdm', { method: 'prop.post', params: { work_mode: 32 } });
   send(f, 'RB05/SER-1234/status', { msg: 'UPDATE-LOCAL-BROKER-CONFIG', localpwd: 'secret' });
-  assert.deepEqual(props, [{ work_mode: 38 }]);
+  assert.deepEqual(props, [{ work_mode: 32 }]);
   assert.equal(states, 0);
   m.stop();
 });

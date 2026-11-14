@@ -107,11 +107,16 @@ function redact(text, serials = []) {
   return out;
 }
 
+/** ISO-8601 UTC to whole seconds, as in the protocol notes ("2026-10-24T09:00:00Z"). */
+function timestamp(d = new Date()) {
+  return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 function clamp(n, lo, hi) {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo;
 }
 
 module.exports = {
   detectModel, actionableFaults, mergeState, isDockedAndIdle, canStart, canDockAction,
-  isReturning, toHomeKit, redact, LOW_BATTERY_PERCENT,
+  isReturning, toHomeKit, redact, timestamp, LOW_BATTERY_PERCENT,
 };

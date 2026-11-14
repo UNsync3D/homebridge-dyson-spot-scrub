@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { canStart, canDockAction, mergeState, toHomeKit, redact, actionableFaults, detectModel } = require('../src/robotState');
+const { canStart, canDockAction, mergeState, toHomeKit, redact, actionableFaults, detectModel, timestamp } = require('../src/robotState');
 
 const idle = () => mergeState({}, {
   msg: 'CURRENT-STATE', state: 'INACTIVE_CHARGING', dockState: 'IDLE', batteryChargeLevel: 100,
@@ -67,4 +67,9 @@ test('redact strips tokens, localpwd, emails, serials and hex clean ids', () => 
     [serial],
   );
   for (const bad of [serial, hex, 'secret', 'me@x.com', 'abc', 'def']) assert.ok(!out.includes(bad), bad);
+});
+
+test('timestamps are UTC to whole seconds', () => {
+  assert.equal(timestamp(new Date('2026-10-24T09:00:00.123Z')), '2026-10-24T09:00:00Z');
+  assert.match(timestamp(), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
 });

@@ -99,14 +99,14 @@ The four mode switches (Vacuum, Vacuum and Mop, Mop, Vacuum then Mop) are gone, 
 
 ## Not yet confirmed against real robot logs
 
-These were written from the protocol notes and still need checking on a live robot. They are marked `ASSUMPTION` in the code:
+These were written from the protocol notes and still need checking on a live robot. They are marked `ASSUMPTION` or `TODO` in the code:
 
-- Home (`ABORT`): the app adds `state` and `cleaningMode` fields whose values are not documented
-- The `get_preference` reply carries rows under `room_preference`
-- The format of the `time` field on legacy and JDM messages
-- Where `prop.post` puts its properties, and that `msgId` can be a string
-- The manifest response shape
-- That consumable `usage` means percent used
+- Home (`ABORT`): the protocol notes list no extra fields, but earlier notes said the app adds some
+- The `get_preference` reply carries the rows under `room_preference`, and `set_preference` takes the same names back
+- The manifest's field names, including the one holding the MQTT prefix (`mqttRootTopicLevel`)
+- That consumable `usage` means percent worn
+- Which `work_mode` value means "returning" (the protocol notes say 32, earlier notes said 38)
+- How `STATE-CHANGE` names the new state, and whether R2 room rows have 11 or 12 values
 
 ## Development
 

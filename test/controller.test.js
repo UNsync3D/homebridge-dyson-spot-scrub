@@ -38,6 +38,10 @@ test('room start follows the app: get_preference, set_preference, START', async 
   assert.equal(set.room_preference[0][8], 0);
   assert.deepEqual(set.uv_switch, [[10, 0], [11, 0]]);
   assert.deepEqual(sent[2][1].cleaningProgramme.unorderedZones, ['11']);
+  assert.equal(sent[2][1].fullCleanType, 'immediate');
+  assert.equal(sent[2][1].cleaningProgramme.zonesDefinitionLastUpdatedDate, '');
+  assert.equal(sent[2][1].cleaningProgramme.persistentMapId, 'MAP1');
+  assert.match(sent[2][1].time, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/); // whole seconds, no milliseconds
 });
 
 test('only one start at a time', async () => {
@@ -49,11 +53,11 @@ test('only one start at a time', async () => {
   await p;
 });
 
-test('Stop during preparation cancels START', async () => {
+test('Home during preparation cancels START', async () => {
   const { c, sent, waiters, tick } = setup();
   const p = c.startRooms('MAP1', null);
   await tick();
-  await c.stop();
+  await c.home();
   waiters[0]({ data: { map_id: 'MAP1', room_preference: ROWS() } });
   await p;
   assert.ok(!sent.some((x) => x[0] === 'legacy' && x[1].msg === 'START'));
@@ -93,5 +97,24 @@ test('dock actions are refused unless docked and idle, and resume is a JDM call'
   await ok.c.dockAction('COLLECT_DUST');
   assert.equal(ok.sent[0][1].action, 'COLLECT_DUST');
   await ok.c.resume();
-  assert.deepEqual(ok.sent[1].slice(1), ['service.set_room_clean', { ctrl_value: 1, clean_type: 0, room_ids: [] }]);
+  assert.deepEqual(ok.sent[1].slice(1), ['service.set_room_clean', { ctrl_value: 1 }]);
+});
+
+test('prefer_type from the reply is sent back; 1 only when the reply has none', async () => {
+  for (const [reply, expected] of [[{ prefer_type: 2 }, 2], [{}, 1]]) {
+    const { c, sent, waiters, tick } = setup();
+    const p = c.startRooms('MAP1', null);
+    await tick();
+    waiters[0]({ data: { map_id: 'MAP1', room_preference: ROWS(), ...reply } });
+    await p;
+    assert.equal(sent.find((x) => x[1] === 'service.set_preference')[2].prefer_type, expected);
+  }
+});
+
+test('there is no STOP message: Pause and Home are the only ways to end a clean', async () => {
+  const { c, sent } = setup('spot-scrub-ai', { state: 'FULL_CLEAN_RUNNING', dockState: 'IDLE' });
+  assert.equal(c.stop, undefined);
+  await c.pause();
+  await c.home();
+  assert.deepEqual(sent.map((x) => x[1].msg), ['PAUSE', 'ABORT']);
 });

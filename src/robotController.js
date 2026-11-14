@@ -4,9 +4,9 @@
  * Link contract: sendLegacy(msg) and callJdm(method, params) -> {code, data}.
  *
  * Rules: 1 ready check, 2 stale-fault start, 3 dock actions only when idle,
- * 5 stop cancels a start in preparation, 6 one start at a time, 8 never trust a reply for the wrong map.
+ * 5 Pause and Home cancel a start in preparation, 6 one start at a time, 8 never trust a reply for the wrong map.
  */
-const { canDockAction, canStart } = require('./robotState');
+const { canDockAction, canStart, timestamp } = require('./robotState');
 
 class CommandRefused extends Error {}
 class Cancelled extends Error {}
@@ -55,7 +55,7 @@ class RobotController {
 
       await this.link.callJdm('service.set_preference', {
         map_id: mapId,
-        prefer_type: 1,
+        prefer_type: data.prefer_type !== undefined ? data.prefer_type : 1, // echoed back; 1 only if the reply had none
         room_preference: this.markSelection(rows, chosen),
         uv_switch: data.uv_switch || [], // sent back unchanged
       });
@@ -66,7 +66,12 @@ class RobotController {
         'mode-reason': 'RAPP',
         time: now(),
         cleaningMode: 'zoneConfigured',
-        cleaningProgramme: { persistentMapId: mapId, unorderedZones: chosen.map(String) },
+        fullCleanType: 'immediate',
+        cleaningProgramme: {
+          persistentMapId: mapId,
+          zonesDefinitionLastUpdatedDate: '',
+          unorderedZones: chosen.map(String),
+        },
       });
     } catch (e) {
       if (e instanceof Cancelled) return; // Pause, Stop or Home cancelled a start still being prepared
@@ -81,20 +86,12 @@ class RobotController {
     await this.link.sendLegacy({ msg: 'PAUSE', 'mode-reason': 'RAPP', time: now() });
   }
 
-  /** No legacy resume exists; a START would begin a new clean. */
+  /** No legacy resume exists (a START would begin a new clean), so this is the JDM call alone. */
   async resume() {
-    await this.link.callJdm('service.set_room_clean', { ctrl_value: 1, clean_type: 0, room_ids: [] });
+    await this.link.callJdm('service.set_room_clean', { ctrl_value: 1 });
   }
 
-  async stop() {
-    this.stopCounter++;
-    await this.link.sendLegacy({ msg: 'STOP', 'mode-reason': 'RAPP', time: now() });
-  }
-
-  /**
-   * Home. The app also adds `state` and `cleaningMode` fields whose values aren't documented yet:
-   * capture an ABORT from the app before relying on this.
-   */
+  /** Home: stop and return to the dock. The protocol notes list no extra fields; confirm on a live robot. There is no STOP message. */
   async home() {
     this.stopCounter++;
     await this.link.sendLegacy({ msg: 'ABORT', 'mode-reason': 'RAPP', time: now() });
@@ -121,7 +118,7 @@ class RobotController {
 }
 
 function now() {
-  return new Date().toISOString(); // ASSUMPTION: format, confirm against a capture
+  return timestamp();
 }
 
 module.exports = { RobotController, CommandRefused };
