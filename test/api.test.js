@@ -78,3 +78,58 @@ test('country and serial validation', () => {
   assert.ok(isSafeSerial('AB1-AU-ABC1234D'));
   for (const bad of ['', 'a#b', 'a/b', '../x', 'a+b', 'ab']) assert.ok(!isSafeSerial(bad), bad);
 });
+
+test('headers match the app: login adds Cache-Control, authenticated calls do not', async () => {
+  const f = fakeFetch({
+    'POST /v3/userregistration/email/userstatus?country=AU': { body: {} },
+    'GET /v2/provisioningservice/manifest': { body: [] },
+  });
+  const api = new DysonApi({ country: 'AU', fetchImpl: f.impl, token: 't1' });
+  await api.userStatus('me@x.com');
+  await api.robots();
+  const [login, authed] = f.calls.map((c) => c.init.headers);
+  assert.equal(login['Cache-Control'], 'no-cache');
+  assert.equal(login['Content-Type'], 'application/json');
+  assert.equal(login['Accept-Language'], 'en-AU,en;q=0.9');
+  assert.equal(authed['Cache-Control'], undefined);
+  assert.equal(authed.Authorization, 'Bearer t1');
+  assert.equal(authed['Content-Type'], 'application/json');
+});
+
+test('manifest: lowercase keys accepted, bad prefix replaced by the model default, 3-char serial allowed', async () => {
+  const f = fakeFetch({
+    'GET /v2/provisioningservice/manifest': { body: [
+      { serial: 'AB1', name: 'Low', productType: '804', version: '2' },
+      { Serial: 'AB2-CD', Name: 'Evil', ProductType: '914', mqttRootTopicLevel: 'RB07/#' },
+      { Serial: 'AB3-CD', Name: 'Good', ProductType: '804', mqttRootTopicLevel: 'RB05' },
+      { Serial: 'AB4-CD', Name: 'Other', ProductType: '999' },
+    ] },
+  });
+  const list = await new DysonApi({ country: 'AU', fetchImpl: f.impl, token: 't' }).robots();
+  assert.deepEqual(list.map((r) => [r.serial, r.prefix]), [['AB1', 'RB05'], ['AB2-CD', 'RB07'], ['AB3-CD', 'RB05']]);
+  assert.equal(list[0].name, 'Low');
+});
+
+test('iotCredentials: camelCase accepted, default authorizer, incomplete rejected', async () => {
+  const route = 'POST /v2/authorize/iot-credentials';
+  const call = (body) => new DysonApi({ country: 'AU', token: 't', fetchImpl: fakeFetch({ [route]: { body } }).impl }).iotCredentials('AB1-CD');
+  const ok = await call({ endpoint: 'e.iot', clientId: 'c', tokenValue: 'v', tokenSignature: 's' });
+  assert.deepEqual(ok, { endpoint: 'e.iot', clientId: 'c', tokenValue: 'v', tokenSignature: 's', authorizerName: 'cld-iot-credentials-lambda-authorizer' });
+  const classic = await call({ Endpoint: 'e', IoTCredentials: { ClientId: 'c', TokenValue: 'v', TokenSignature: 's', CustomAuthorizerName: 'auth' } });
+  assert.equal(classic.authorizerName, 'auth');
+  await assert.rejects(call({ Endpoint: 'e', IoTCredentials: { ClientId: 'c' } }), DysonApiError);
+});
+
+test('roomInventory returns the rooms of one map, or null when the map is not listed', async () => {
+  const f = fakeFetch({
+    'GET /v2/app/AB1-CD/persistent-map-metadata': { body: [
+      { id: 'abc', name: 'Home', zones: [{ id: '10', name: 'Hall' }, { id: 11, name: 'Kitchen' }] },
+      { id: 2, name: 'Upstairs', zones: [] },
+    ] },
+  });
+  const api = new DysonApi({ country: 'AU', fetchImpl: f.impl, token: 't' });
+  assert.deepEqual([...(await api.roomInventory('AB1-CD', 'abc'))], [['10', 'Hall'], ['11', 'Kitchen']]);
+  assert.equal((await api.roomInventory('AB1-CD', 2)).size, 0);
+  assert.equal(await api.roomInventory('AB1-CD', 99), null);
+  await assert.rejects(api.mapMetadata('../x'), DysonApiError);
+});

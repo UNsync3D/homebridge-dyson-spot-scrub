@@ -227,3 +227,57 @@ test('dock actions need a docked, idle robot; resume, pause, home and stop send 
   await ok.c.stop();
   assert.deepEqual(ok.sent.slice(2).map((x) => x[1].msg), ['PAUSE', 'ABORT', 'STOP']);
 });
+
+function setupInv(inventory) {
+  const sent = [];
+  const waiters = [];
+  const link = {
+    sendLegacy: async (m) => { sent.push(['legacy', m]); },
+    callJdm: (method, params) => {
+      sent.push(['jdm', method, params]);
+      if (method === 'service.get_preference') return new Promise((r) => waiters.push(r));
+      return Promise.resolve({ code: 0 });
+    },
+  };
+  const getInventory = typeof inventory === 'function' ? inventory : async () => inventory;
+  const c = new RobotController({ link, model: 'spot-scrub-ai', getState: () => READY, isOnline: () => true, getInventory });
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  return { c, sent, tick, reply: (data) => waiters.shift()({ code: 0, data }) };
+}
+
+test('REST inventory: rooms deleted from the map are dropped from the sent preferences', async () => {
+  const { c, sent, tick, reply } = setupInv(new Map([['10', 'Hall']]));
+  const p = c.startWholeHome('1');
+  await tick();
+  reply({ room: ROWS() }); // robot still lists Kitchen (11)
+  await p;
+  assert.deepEqual(sent[1][2].room_preference.map((r) => r[0]), [10]);
+  assert.deepEqual(sent[2][1].cleaningProgramme.unorderedZones, ['10']);
+});
+
+test('REST inventory: a partial reply refuses a whole-home clean but still allows a room-specific one', async () => {
+  const inv = new Map([['10', 'Hall'], ['11', 'Kitchen'], ['12', 'Bedroom']]);
+  const a = setupInv(inv);
+  const p = a.c.startWholeHome('1');
+  await a.tick();
+  a.reply({ room: ROWS() });
+  await assert.rejects(p, /only 2 of 3 rooms/);
+  assert.deepEqual(a.sent.map(kind), ['service.get_preference']); // nothing written, nothing started
+  const b = setupInv(inv);
+  const q = b.c.startRooms('1', [11]);
+  await b.tick();
+  b.reply({ room: ROWS() });
+  await q;
+  assert.equal(kind(b.sent.at(-1)), 'START');
+});
+
+test('REST inventory unavailable (null or error): the robot reply is used as before', async () => {
+  for (const inv of [null, async () => { throw new Error('offline'); }]) {
+    const { c, sent, tick, reply } = setupInv(inv);
+    const p = c.startWholeHome('1');
+    await tick();
+    reply({ room: ROWS() });
+    await p;
+    assert.deepEqual(sent[2][1].cleaningProgramme.unorderedZones, ['10', '11']);
+  }
+});

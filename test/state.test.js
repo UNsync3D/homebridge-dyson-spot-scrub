@@ -84,3 +84,29 @@ test('clearReadiness drops the ready fields, keeps the rest, and blocks starts u
   assert.ok(!canStart(after, true).ok);
   assert.ok(canStart(mergeState(after, { state: 'INACTIVE_CHARGING', dockState: 'IDLE' }), true).ok);
 });
+
+test('older firmware reports faultId; it is treated like faultCode', () => {
+  const s = mergeState({}, { state: 'INACTIVE_CHARGING', dockState: 'IDLE', activeFaults: [{ faultId: 2105 }, { faultId: 513 }] });
+  assert.deepEqual(actionableFaults(s).map((f) => f.faultId), [513]);
+  assert.match(canStart(s, true).reason, /513/);
+});
+
+test('DOCKED counts as docked and idle', () => {
+  assert.ok(canStart(mergeState({}, { state: 'INACTIVE_CHARGED', dockState: 'DOCKED' }), true).ok);
+});
+
+test('dock actions: allowed on the dock between cleans, refused when busy, cleaning or returning', () => {
+  const st = (state, dockState) => mergeState({}, { state, dockState });
+  for (const state of ['INACTIVE_CHARGING', 'INACTIVE_CHARGED']) assert.ok(canDockAction(st(state, 'IDLE'), true).ok);
+  for (const dock of ['COLLECTING_DUST', 'WASHING_MOP', 'DRYING_MOP']) assert.ok(!canDockAction(st('INACTIVE_CHARGING', dock), true).ok);
+  for (const state of ['FULL_CLEAN_RUNNING', 'FULL_CLEAN_FINISHED', 'RETURNING_TO_BASE', 'INACTIVE_DISCHARGING']) {
+    assert.ok(!canDockAction(st(state, 'IDLE'), true).ok, state);
+  }
+  assert.ok(!canDockAction(st('INACTIVE_CHARGING', 'IDLE'), false).ok);
+});
+
+test('RETURNING_TO_BASE reads as returning', () => {
+  const { isReturning } = require('../src/robotState');
+  assert.ok(isReturning({ state: 'RETURNING_TO_BASE' }));
+  assert.ok(!isReturning({ state: 'FULL_CLEAN_RUNNING' }));
+});

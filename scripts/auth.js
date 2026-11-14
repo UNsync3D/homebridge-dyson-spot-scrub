@@ -59,7 +59,13 @@ async function main() {
 
     const api = new DysonApi({ country });
     await api.appVersion();
-    await api.userStatus(email);
+    const status = await api.userStatus(email);
+    if (status && status.accountStatus && status.accountStatus !== 'ACTIVE') {
+      throw new DysonApiError(`Dyson reports this account as ${status.accountStatus}`);
+    }
+    if (status && status.authenticationMethod && status.authenticationMethod !== 'EMAIL_PWD_2FA') {
+      console.warn(`Unexpected sign-in method (${status.authenticationMethod}); continuing with email and code.`);
+    }
     const challengeId = await api.startLogin(email);
     console.log('Dyson has emailed you a 6-digit code.');
     const otpCode = await ask(rl, 'Code: ');

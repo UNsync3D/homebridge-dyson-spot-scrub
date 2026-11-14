@@ -24,11 +24,13 @@ function validRoomRow(row) {
 }
 
 class RobotController {
-  constructor({ link, getState, isOnline, model }) {
+  constructor({ link, getState, isOnline, model, getInventory }) {
     this.link = link;
     this.getState = getState;
     this.isOnline = isOnline;
     this.model = model;
+    // Optional async (mapNum) => Map(room id -> name) from Dyson's REST map metadata, or null when unavailable.
+    this.getInventory = getInventory;
     this.startInFlight = false;
     this.stopCounter = 0;
     // get_preference is not a complete room list: after a scheduled clean it can hold only that room.
@@ -72,7 +74,19 @@ class RobotController {
         throw new CommandRefused('The robot returned incomplete room settings');
       }
 
-      const rows = this.mergeRooms(mapNum, fresh);
+      const store = this.mergeRooms(mapNum, fresh);
+      const inventory = await this.inventoryFor(mapNum);
+      stillWanted();
+      if (inventory) {
+        // Dyson's own list is authoritative: forget rooms that no longer exist on this map ...
+        for (const id of [...store.keys()]) if (!inventory.has(id)) store.delete(id);
+        // ... and don't quietly clean "everything" when the robot only told us about some rooms.
+        const missing = [...inventory.keys()].filter((id) => !store.has(id));
+        if (roomIds === null && missing.length > 0) {
+          throw new CommandRefused(`The robot reported only ${store.size} of ${inventory.size} rooms; try again later`);
+        }
+      }
+      const rows = [...store.values()];
       const known = new Set(rows.map((r) => String(r[0])));
       const wanted = roomIds ? roomIds.map(String) : rows.map((r) => String(r[0]));
       if (wanted.length === 0 || new Set(wanted).size !== wanted.length || wanted.some((id) => !known.has(id))) {
@@ -161,7 +175,17 @@ class RobotController {
     const store = this.roomStore.get(key) || new Map();
     for (const row of fresh) store.set(String(row[0]), [...row]); // newest reply wins; a replaced room keeps its place
     this.roomStore.set(key, store);
-    return [...store.values()];
+    return store;
+  }
+
+  /** The REST room list, or null if it isn't wired up or the call fails (then the robot's replies are all we have). */
+  async inventoryFor(mapNum) {
+    if (!this.getInventory) return null;
+    try {
+      return (await this.getInventory(mapNum)) || null;
+    } catch {
+      return null;
+    }
   }
 }
 

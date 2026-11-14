@@ -101,11 +101,11 @@ The four mode switches (Vacuum, Vacuum and Mop, Mop, Vacuum then Mop) are gone, 
 
 The room-start sequence, message formats and state handling follow the Home Assistant integration, which runs on a live robot. Still unconfirmed here:
 
-- The manifest's field names, including the one holding the MQTT prefix (`mqttRootTopicLevel`)
+- The manifest field holding the MQTT prefix (`mqttRootTopicLevel`). If it is missing or invalid the plugin falls back to `RB05` / `RB07` by product type, and the MQTT layer switches to the prefix the robot itself reports
 - That consumable `usage` means percent worn
 - Whether `get_preference` replies always carry `map_id` (the plugin accepts them either way)
 - `STOP`: the Home Assistant integration sends it, but the protocol notes don't list it
-- **Rooms:** `get_preference` can be partial after a scheduled clean. The plugin remembers the rooms it has seen since Homebridge started. The Home Assistant integration also reads the REST map metadata, which isn't ported yet.
+- **Rooms:** `get_preference` can be partial after a scheduled clean. The plugin remembers the rooms it has seen since Homebridge started and compares them with the room list from Dyson's REST map metadata. Rooms deleted from the map are dropped, and a whole-home clean is refused (rather than quietly skipping rooms) while the robot has reported only some of them. Cleaning specific rooms is still allowed. If the REST call fails, the robot's reply is used as is. Whether the REST zone list matches the robot's room IDs is unconfirmed.
 - **Current map:** Clean needs `persistentMapId` from the robot's state, as the Home Assistant integration does. Its map-ID probes (0 to 3) only fill the room list for display, so they are not ported.
 
 ## Development

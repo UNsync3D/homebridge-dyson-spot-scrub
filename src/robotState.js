@@ -14,9 +14,15 @@ function detectModel(productType, prefix) {
 /** Faults that must never be shown or block anything. */
 const LOG_ONLY_CODES = new Set(['2105', '2103', '22016']);
 
+/** Current firmware reports `faultCode`; older firmware used `faultId`. */
+function faultCode(f) {
+  const raw = f.faultCode ?? f.faultId;
+  return raw === undefined || raw === null ? undefined : String(raw);
+}
+
 function actionableFaults(s) {
   return (s.activeFaults || []).filter(
-    (f) => f.nextActionRequired !== 'LOG_ONLY' && !LOG_ONLY_CODES.has(String(f.faultCode)),
+    (f) => f.nextActionRequired !== 'LOG_ONLY' && !LOG_ONLY_CODES.has(faultCode(f)),
   );
 }
 
@@ -36,7 +42,7 @@ const READY_STATES = new Set(['INACTIVE_CHARGING', 'INACTIVE_CHARGED', 'INACTIVE
 function isDockedAndIdle(s) {
   return (
     READY_STATES.has(String(s.state)) &&
-    (s.dockState === undefined || s.dockState === 'IDLE' || s.dockState === 'DRYING_MOP') &&
+    (s.dockState === undefined || s.dockState === 'IDLE' || s.dockState === 'DOCKED' || s.dockState === 'DRYING_MOP') &&
     s.workMode !== 38
   );
 }
@@ -47,16 +53,19 @@ function canStart(s, online) {
   if (s.state === undefined) return { ok: false, reason: 'No state received yet' };
   if (!isDockedAndIdle(s)) return { ok: false, reason: `Not ready (${s.state}, dock ${s.dockState})` };
   const blocking = actionableFaults(s).filter((f) => f.nextActionRequired !== 'USER_CONTINUE');
-  if (blocking.length > 0) return { ok: false, reason: `Fault ${blocking[0].faultCode}` };
+  if (blocking.length > 0) return { ok: false, reason: `Fault ${faultCode(blocking[0])}` };
   return { ok: true, needsAbortDry: s.dockState === 'DRYING_MOP' };
 }
 
-/** Rule 3: dock actions only while docked and the dock isn't busy. */
+const DOCK_BUSY_STATES = new Set(['COLLECTING_DUST', 'WASHING_MOP', 'DRYING_MOP']);
+// On the dock between cleans. Excludes a mid-clean recharge and FINISHED (also reported on the way back).
+const IDLE_ON_DOCK_STATES = new Set(['INACTIVE_CHARGING', 'INACTIVE_CHARGED', 'CHARGING']);
+
+/** Rule 3: dock actions only while the robot sits on the dock between cleans and the dock itself is idle. */
 function canDockAction(s, online) {
   if (!online) return { ok: false, reason: 'Robot is offline' };
-  if (!isDockedAndIdle(s) || (s.dockState !== undefined && s.dockState !== 'IDLE')) {
-    return { ok: false, reason: 'Robot must be docked and the dock idle' };
-  }
+  if (DOCK_BUSY_STATES.has(s.dockState)) return { ok: false, reason: `Dock already busy (${s.dockState})` };
+  if (!IDLE_ON_DOCK_STATES.has(s.state)) return { ok: false, reason: `Robot not docked (${s.state || 'unknown'})` };
   return { ok: true };
 }
 
@@ -71,7 +80,7 @@ function clearReadiness(s) {
 
 /** Rule 4: ABORTED / FINISHED mean "driving back", not "done". */
 function isReturning(s) {
-  return s.state === 'FULL_CLEAN_ABORTED' || s.state === 'FULL_CLEAN_FINISHED' || s.workMode === 38;
+  return ['RETURNING_TO_BASE', 'ABORTED', 'FULL_CLEAN_ABORTED', 'FULL_CLEAN_FINISHED'].includes(s.state) || s.workMode === 38;
 }
 
 const LOW_BATTERY_PERCENT = 20;

@@ -111,6 +111,7 @@ class DysonPlatform {
     });
     const controller = new RobotController({
       link, model,
+      getInventory: (mapNum) => dyson.roomInventory(r.serial, mapNum),
       getState: () => rt.state,
       isOnline: () => rt.online,
     });

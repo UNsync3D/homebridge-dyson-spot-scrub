@@ -40,6 +40,7 @@ class FakeApi {
   constructor() {}
   async robots() { return [{ serial: SERIAL, name: 'Dyson Robot', productType: '804', version: '1', prefix: 'RB05' }]; }
   async iotCredentials() { return {}; }
+  async roomInventory() { return null; }
 }
 
 function makeEnv(t, { cached = [] } = {}) {
