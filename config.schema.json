@@ -1,0 +1,30 @@
+{
+  "pluginAlias": "DysonRobot",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Run `scripts/auth.js` once to sign in to your Dyson account before starting. See the README.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": { "title": "Name", "type": "string", "default": "DysonRobot", "required": true },
+      "refreshIntervalSeconds": {
+        "title": "State refresh interval (seconds)",
+        "type": "integer", "default": 30, "minimum": 10, "maximum": 300
+      },
+      "exposeDockActions": {
+        "title": "Show Empty Bin, Wash Mop and Dry Mop switches",
+        "type": "boolean", "default": true
+      },
+      "serials": {
+        "title": "Only these robots (serials, optional)",
+        "description": "Leave empty to add every supported robot on the account.",
+        "type": "array", "items": { "type": "string" }
+      },
+      "logMqtt": {
+        "title": "Log every MQTT message (debug)",
+        "description": "Secrets, serials and emails are redacted.",
+        "type": "boolean", "default": false
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+dyson-creds.json
+*.creds.json
+.DS_Store
+*.swp
+.idea/
+.vscode/
+*.log
