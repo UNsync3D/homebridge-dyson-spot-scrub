@@ -137,7 +137,7 @@ class DysonMqtt extends EventEmitter {
         break;
       case 'HELLO':
       case 'IM-BACK':
-        this.emit('online', true);
+        // Not proof the robot is reachable with a current state: its CURRENT-STATE reply marks it online.
         this.requestState().catch((e) => this.emit('error', e));
         break;
       case 'GONE-AWAY':

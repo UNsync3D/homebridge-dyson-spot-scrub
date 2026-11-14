@@ -93,7 +93,7 @@ The four mode switches (Vacuum, Vacuum and Mop, Mop, Vacuum then Mop) are gone, 
 
 **"Dyson rejected the saved sign-in"**: the token has expired or been revoked. Run the auth script again.
 
-**Tiles show "No Response"**: the robot is offline in Dyson's cloud (check the MyDyson app), or Homebridge has no internet. Reads recover automatically when the robot reports it is back.
+**Tiles show "No Response"**: the robot is offline in Dyson's cloud (check the MyDyson app), or Homebridge has no internet. The plugin asks for the robot's state every minute and recovers by itself. Until fresh state arrives after an outage, Clean is refused rather than built on old data.
 
 **Clean does nothing and snaps back off**: the robot refused. It must be on the dock and idle, with no real fault. A stale "tank missing" fault does not block a start, but the robot refuses the mop clean itself if the tank is still out.
 
@@ -106,7 +106,7 @@ The room-start sequence, message formats and state handling follow the Home Assi
 - Whether `get_preference` replies always carry `map_id` (the plugin accepts them either way)
 - `STOP`: the Home Assistant integration sends it, but the protocol notes don't list it
 - **Rooms:** `get_preference` can be partial after a scheduled clean. The plugin remembers the rooms it has seen since Homebridge started. The Home Assistant integration also reads the REST map metadata, which isn't ported yet.
-- **Current map:** if the robot leaves `persistentMapId` out of its idle state, Clean can't start. The Home Assistant integration probes map IDs 0 to 3, which isn't ported yet.
+- **Current map:** Clean needs `persistentMapId` from the robot's state, as the Home Assistant integration does. Its map-ID probes (0 to 3) only fill the room list for display, so they are not ported.
 
 ## Development
 

@@ -131,6 +131,51 @@ test('Clean on runs the app sequence; Clean off sends Home; dock switch is refus
   assert.equal(link.sent.at(-1)[1].msg, 'ABORT');
 });
 
+test('going offline clears readiness, keeps the last values on screen, and blocks starts until fresh state', { skip: !hap && 'homebridge not installed' }, async (t) => {
+  const env = makeEnv(t);
+  env.api.emit('didFinishLaunching');
+  await settle();
+  const acc = env.registered[0];
+  const link = FakeMqtt.last;
+  const battery = acc.getServiceById(S().Battery, 'battery').getCharacteristic(C().BatteryLevel);
+  const clean = acc.getServiceById(S().Switch, 'clean').getCharacteristic(C().On);
+
+  link.emit('online', true);
+  link.emit('state', { msg: 'CURRENT-STATE', state: 'INACTIVE_CHARGING', dockState: 'IDLE', batteryChargeLevel: 87, persistentMapId: '1' });
+  assert.equal(battery.value, 87);
+
+  link.emit('online', false);
+  assert.equal(battery.value, 87); // no blank pushed from the cleared state
+  await assert.rejects(battery.handleGetRequest());
+
+  // Back online but no fresh state yet: a start must be refused, not built on the old snapshot.
+  link.emit('online', true);
+  link.sent.length = 0;
+  await assert.rejects(clean.handleSetRequest(true));
+  assert.ok(!link.sent.some((x) => x[0] === 'jdm' || (x[0] === 'legacy' && x[1].msg === 'START')));
+
+  link.emit('state', { msg: 'CURRENT-STATE', state: 'INACTIVE_CHARGING', dockState: 'IDLE', batteryChargeLevel: 90 });
+  assert.equal(await battery.handleGetRequest(), 90);
+  await clean.handleSetRequest(true);
+  assert.equal(link.sent.at(-1)[1].msg, 'START');
+});
+
+test('while the robot is offline the plugin asks for its state once a minute', { skip: !hap && 'homebridge not installed' }, async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const env = makeEnv(t);
+  env.api.emit('didFinishLaunching');
+  await settle();
+  const link = FakeMqtt.last;
+  link.sent.length = 0;
+  t.mock.timers.tick(60000); // offline: only the one-minute poll runs
+  assert.equal(link.sent.filter((x) => x[1].msg === 'REQUEST-CURRENT-STATE').length, 1);
+
+  link.emit('online', true);
+  link.sent.length = 0;
+  t.mock.timers.tick(60000); // online: two 30 s refreshes, no extra offline polls
+  assert.equal(link.sent.filter((x) => x[1].msg === 'REQUEST-CURRENT-STATE').length, 2);
+});
+
 test('prunes services left by an older version', { skip: !hap && 'homebridge not installed' }, async (t) => {
   const uuid = hap.uuid.generate(`${PLUGIN_NAME}:${SERIAL}`);
   const old = new PlatformAccessory('Dyson Robot', uuid);

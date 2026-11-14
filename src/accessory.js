@@ -73,6 +73,11 @@ class RobotAccessory {
   /** Call after every merged state change and on offline/online changes. */
   onState(state, online) {
     this.online = online;
+    if (!online) {
+      // Keep the last values on screen (reads fail with "No Response" meanwhile); don't push blanks from a cleared state.
+      this.docked.updateCharacteristic(this.C.StatusActive, false);
+      return;
+    }
     this.view = toHomeKit(state);
     const v = this.view;
     this.clean.updateCharacteristic(this.C.On, v.cleanOn);

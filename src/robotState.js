@@ -60,6 +60,15 @@ function canDockAction(s, online) {
   return { ok: true };
 }
 
+/**
+ * Drop the fields that say "ready". Never authorise a new job from a snapshot taken before an outage or
+ * reconnect: wait for fresh telemetry. The map, battery, rooms and consumables are kept.
+ */
+function clearReadiness(s) {
+  const { state, dockState, workMode, jdmStatus, ...rest } = s; // eslint-disable-line no-unused-vars
+  return rest;
+}
+
 /** Rule 4: ABORTED / FINISHED mean "driving back", not "done". */
 function isReturning(s) {
   return s.state === 'FULL_CLEAN_ABORTED' || s.state === 'FULL_CLEAN_FINISHED' || s.workMode === 38;
@@ -118,5 +127,5 @@ function clamp(n, lo, hi) {
 
 module.exports = {
   detectModel, actionableFaults, mergeState, isDockedAndIdle, canStart, canDockAction,
-  isReturning, toHomeKit, redact, timestamp, LOW_BATTERY_PERCENT,
+  isReturning, clearReadiness, toHomeKit, redact, timestamp, LOW_BATTERY_PERCENT,
 };

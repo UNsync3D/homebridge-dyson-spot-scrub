@@ -9,11 +9,12 @@ const { DysonApi } = require('./dysonApi');
 const { DysonMqtt } = require('./dysonMqtt');
 const { RobotAccessory } = require('./accessory');
 const { RobotController } = require('./robotController');
-const { detectModel, mergeState, redact } = require('./robotState');
+const { clearReadiness, detectModel, mergeState, redact } = require('./robotState');
 
 const PLUGIN_NAME = 'homebridge-dyson-spot-scrub';
 const PLATFORM_NAME = 'DysonRobot';
 const CREDS_FILE = 'dyson-creds.json';
+const OFFLINE_POLL_MS = 60000;
 
 class DysonPlatform {
   constructor(log, config, api) {
@@ -136,6 +137,11 @@ class DysonPlatform {
       if (rt.online === online) return;
       rt.online = online;
       this.info(online ? 'Robot online' : 'Robot offline');
+      if (!online) {
+        // Never authorise a new job from telemetry that predates the outage.
+        rt.state = clearReadiness(rt.state);
+        controller.cancelPendingStart();
+      }
       view.onState(rt.state, rt.online);
     });
     link.on('error', (e) => this.warn(`MQTT: ${e.message}`));
@@ -145,6 +151,11 @@ class DysonPlatform {
       if (rt.online) link.requestState().catch(() => {});
     }, this.refreshMs);
     rt.timer.unref();
+    // While Dyson reports the robot gone, ask for its state once a minute until it answers.
+    rt.offlineTimer = setInterval(() => {
+      if (!rt.online) link.requestState().catch(() => {});
+    }, OFFLINE_POLL_MS);
+    rt.offlineTimer.unref();
 
     rt.link = link;
     this.robots.set(r.serial, rt);
@@ -154,6 +165,7 @@ class DysonPlatform {
   shutdown() {
     for (const rt of this.robots.values()) {
       clearInterval(rt.timer);
+      clearInterval(rt.offlineTimer);
       rt.link.stop();
     }
   }

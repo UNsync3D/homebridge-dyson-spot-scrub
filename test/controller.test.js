@@ -184,6 +184,16 @@ test('a start while drying stops the dry after the settings are confirmed, just 
   assert.match(time, ISO);
 });
 
+test('cancelPendingStart drops a start still being prepared', async () => {
+  const { c, sent, tick, reply } = setup();
+  const p = c.startRooms('1', null);
+  await tick();
+  c.cancelPendingStart();
+  reply({ room: ROWS() });
+  await p;
+  assert.ok(!sent.some((x) => x[1] === 'service.set_preference' || (x[0] === 'legacy' && x[1].msg === 'START')));
+});
+
 test('readiness is checked again after waiting', async () => {
   let state = READY;
   const sent = [];

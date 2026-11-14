@@ -58,17 +58,20 @@ test('switches prefix to the robot-reported one and ignores other serials', asyn
   m.stop();
 });
 
-test('GONE-AWAY marks offline, IM-BACK marks online and re-requests state', async () => {
+test('GONE-AWAY marks offline; IM-BACK and HELLO only ask for state; the CURRENT-STATE reply marks it online', async () => {
   const { f, m } = await started();
   const online = [];
   m.on('online', (v) => online.push(v));
   send(f, 'RB05/SER-1234/status', { msg: 'GONE-AWAY' });
   const before = f.calls.pubs.length;
   send(f, 'RB05/SER-1234/status', { msg: 'IM-BACK' });
+  send(f, 'RB05/SER-1234/status', { msg: 'HELLO' });
   await wait();
+  assert.deepEqual(online, [false]); // not online yet: no fresh state
+  assert.equal(f.calls.pubs.length, before + 2);
+  assert.ok(f.calls.pubs.slice(-2).every((x) => x[1].msg === 'REQUEST-CURRENT-STATE'));
+  send(f, 'RB05/SER-1234/status', { msg: 'CURRENT-STATE', state: 'INACTIVE_CHARGING' });
   assert.deepEqual(online, [false, true]);
-  assert.equal(f.calls.pubs.length, before + 1);
-  assert.equal(f.calls.pubs.at(-1)[1].msg, 'REQUEST-CURRENT-STATE');
   m.stop();
 });
 

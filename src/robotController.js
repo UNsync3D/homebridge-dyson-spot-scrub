@@ -145,6 +145,11 @@ class RobotController {
     await this.link.sendLegacy({ msg: 'START-DOCK-ACTION', action, time: now() });
   }
 
+  /** A start still being prepared is dropped (the robot went offline, or the connection was lost). */
+  cancelPendingStart() {
+    this.stopCounter++;
+  }
+
   ready() {
     const check = canStart(this.getState(), this.isOnline());
     if (!check.ok) throw new CommandRefused(check.reason);

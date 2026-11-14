@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { canStart, canDockAction, mergeState, toHomeKit, redact, actionableFaults, detectModel, timestamp } = require('../src/robotState');
+const { canStart, canDockAction, mergeState, toHomeKit, redact, actionableFaults, detectModel, timestamp, clearReadiness } = require('../src/robotState');
 
 const idle = () => mergeState({}, {
   msg: 'CURRENT-STATE', state: 'INACTIVE_CHARGING', dockState: 'IDLE', batteryChargeLevel: 100,
@@ -72,4 +72,15 @@ test('redact strips tokens, localpwd, emails, serials and hex clean ids', () => 
 test('timestamps are UTC to whole seconds', () => {
   assert.equal(timestamp(new Date('2026-10-24T09:00:00.123Z')), '2026-10-24T09:00:00Z');
   assert.match(timestamp(), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+});
+
+test('clearReadiness drops the ready fields, keeps the rest, and blocks starts until fresh state arrives', () => {
+  const before = mergeState(idle(), { persistentMapId: '1', consumables: [{ type: 'brushBar', usage: 5 }], workMode: 38, jdmStatus: 4 });
+  const after = clearReadiness(before);
+  for (const k of ['state', 'dockState', 'workMode', 'jdmStatus']) assert.ok(!(k in after), k);
+  assert.equal(after.batteryChargeLevel, 100);
+  assert.equal(after.persistentMapId, '1');
+  assert.equal(before.state, 'INACTIVE_CHARGING'); // input untouched
+  assert.ok(!canStart(after, true).ok);
+  assert.ok(canStart(mergeState(after, { state: 'INACTIVE_CHARGING', dockState: 'IDLE' }), true).ok);
 });
