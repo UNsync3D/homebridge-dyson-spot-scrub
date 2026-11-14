@@ -11,6 +11,7 @@
  * Events: 'online' (bool), 'state' (legacy status payload), 'prop' (JDM prop.post data), 'error' (Error).
  */
 const { EventEmitter } = require('node:events');
+const { randomInt } = require('node:crypto');
 const { timestamp } = require('./robotState');
 
 const KEEPALIVE_SECONDS = 30;
@@ -35,8 +36,6 @@ class DysonMqtt extends EventEmitter {
     this.log = logger || { debug() {}, warn() {} };
     this.client = null;
     this.pending = new Map();
-    // Small numeric ids like the app's (48213), well inside 32 bits; a random start makes a clash with another client unlikely.
-    this.msgCounter = 100000 + Math.floor(Math.random() * 1e8);
     this.stopped = false;
     this.backoff = BACKOFF_START_MS;
     this.reconnectTimer = null;
@@ -182,10 +181,16 @@ class DysonMqtt extends EventEmitter {
     return this.sendLegacy({ msg: 'REQUEST-CURRENT-STATE', time: timestamp() });
   }
 
+  /** A random 32-bit number as a string, the form the Home Assistant integration sends on live robots. */
+  newMsgId() {
+    let id;
+    do { id = String(randomInt(0, 4294967296)); } while (this.pending.has(id));
+    return id;
+  }
+
   /** JDM RPC. Resolves with {code, data} from the reply matched by msgId. */
   callJdm(method, params) {
-    const id = ++this.msgCounter;
-    const msgId = String(id); // key for the pending map; on the wire the id is a number
+    const msgId = this.newMsgId();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(msgId);
@@ -193,10 +198,11 @@ class DysonMqtt extends EventEmitter {
       }, JDM_TIMEOUT_MS);
       this.pending.set(msgId, { resolve, reject, timer });
       this.publish('command/jdm', {
-        msgId: id,
+        msgId,
         version: '1.0.1',
         method,
         params,
+        time: timestamp(),
       }).catch((e) => {
         clearTimeout(timer);
         this.pending.delete(msgId);

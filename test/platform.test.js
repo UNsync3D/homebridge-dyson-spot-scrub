@@ -31,7 +31,7 @@ class FakeMqtt extends EventEmitter {
   async callJdm(method, params) {
     this.sent.push(['jdm', method, params]);
     if (method === 'service.get_preference') {
-      return { code: 0, data: { map_id: params.map_id, room_preference: [[10, 'Hall', 0, 3, 0, 1, 0, 0, 0, 0, 1, 0]], uv_switch: [] } };
+      return { code: 0, data: { room: [[10, 'Hall', 0, 3, 0, 1, 0, 0, 0, 0, 1, 0]], uv_switch: [] } };
     }
     return { code: 0 };
   }
@@ -90,7 +90,7 @@ test('reads fail while offline, then follow the robot state', { skip: !hap && 'h
   link.emit('online', true);
   link.emit('state', {
     msg: 'CURRENT-STATE', state: 'INACTIVE_CHARGING', dockState: 'IDLE', batteryChargeLevel: 87,
-    persistentMapId: 'MAP1', consumables: [{ type: 'brushBar', usage: 30 }],
+    persistentMapId: '1', consumables: [{ type: 'brushBar', usage: 30 }],
     activeFaults: [{ faultCode: 2105, nextActionRequired: 'LOG_ONLY' }],
   });
   assert.equal(await level.handleGetRequest(), 87);
@@ -116,7 +116,7 @@ test('Clean on runs the app sequence; Clean off sends Home; dock switch is refus
   const acc = env.registered[0];
   const link = FakeMqtt.last;
   link.emit('online', true);
-  link.emit('state', { msg: 'CURRENT-STATE', state: 'INACTIVE_CHARGING', dockState: 'IDLE', batteryChargeLevel: 100, persistentMapId: 'MAP1' });
+  link.emit('state', { msg: 'CURRENT-STATE', state: 'INACTIVE_CHARGING', dockState: 'IDLE', batteryChargeLevel: 100, persistentMapId: '1' });
 
   const clean = acc.getServiceById(S().Switch, 'clean').getCharacteristic(C().On);
   await clean.handleSetRequest(true);

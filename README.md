@@ -99,14 +99,14 @@ The four mode switches (Vacuum, Vacuum and Mop, Mop, Vacuum then Mop) are gone, 
 
 ## Not yet confirmed against real robot logs
 
-These were written from the protocol notes and still need checking on a live robot. They are marked `ASSUMPTION` or `TODO` in the code:
+The room-start sequence, message formats and state handling follow the Home Assistant integration, which runs on a live robot. Still unconfirmed here:
 
-- Home (`ABORT`): the protocol notes list no extra fields, but earlier notes said the app adds some
-- The `get_preference` reply carries the rows under `room_preference`, and `set_preference` takes the same names back
 - The manifest's field names, including the one holding the MQTT prefix (`mqttRootTopicLevel`)
 - That consumable `usage` means percent worn
-- Which `work_mode` value means "returning" (the protocol notes say 32, earlier notes said 38)
-- How `STATE-CHANGE` names the new state, and whether R2 room rows have 11 or 12 values
+- Whether `get_preference` replies always carry `map_id` (the plugin accepts them either way)
+- `STOP`: the Home Assistant integration sends it, but the protocol notes don't list it
+- **Rooms:** `get_preference` can be partial after a scheduled clean. The plugin remembers the rooms it has seen since Homebridge started. The Home Assistant integration also reads the REST map metadata, which isn't ported yet.
+- **Current map:** if the robot leaves `persistentMapId` out of its idle state, Clean can't start. The Home Assistant integration probes map IDs 0 to 3, which isn't ported yet.
 
 ## Development
 

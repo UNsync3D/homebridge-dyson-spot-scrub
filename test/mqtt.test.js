@@ -79,9 +79,10 @@ test('JDM replies are matched by msgId and other clients replies are ignored', a
   const [topic, body] = f.calls.pubs.at(-1);
   assert.equal(topic, 'RB05/SER-1234/command/jdm');
   assert.equal(body.version, '1.0.1');
-  assert.equal(typeof body.msgId, 'number'); // numeric on the wire, like the app's
-  assert.ok(Number.isInteger(body.msgId) && body.msgId > 0 && body.msgId < 2 ** 31);
-  assert.ok(!('time' in body), 'JDM requests carry no time field');
+  assert.equal(typeof body.msgId, 'string'); // a string on the wire, as the Home Assistant integration sends
+  assert.match(body.msgId, /^\d{1,10}$/);
+  assert.ok(Number(body.msgId) <= 4294967295);
+  assert.match(body.time, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.equal(body.method, 'service.get_preference');
   send(f, 'RB05/SER-1234/status/jdm', { msgId: 'someone-else', code: 0, data: { nope: true } });
   send(f, 'RB05/SER-1234/status/jdm', { msgId: body.msgId, code: 0, method: 'service.get_preference', data: { map_id: 'M' } });
